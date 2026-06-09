@@ -57,6 +57,62 @@ Each benchmark run follows this coding-agent flow:
 This represents the bug-localization and context-construction stage of a coding
 agent. It does not yet apply patches or run a test suite.
 
+## Resource Sensitivity By Stage
+
+Bug report parsing is CPU sensitive. The benchmark reads a structured issue
+description, extracts terms such as retry state, timeout, persistence, and
+failure artifacts, and prepares the query terms used by later repository search.
+This stage does not use the GPU.
+
+Synthetic repository generation is CPU and host-memory sensitive. The workload
+creates many similar modules and symbols to mimic a large codebase with repeated
+patterns and distracting candidates. It mainly stresses Python object creation,
+string construction, and host memory capacity.
+
+Metadata construction is CPU and CPU-memory-bandwidth sensitive. The benchmark
+builds posting lists, symbol records, dependency graphs, and test-affinity
+graphs. These structures model the indexes a coding agent would use for code
+search, symbol lookup, caller/callee expansion, and test-related localization.
+
+Repository scanning is CPU-memory-bandwidth sensitive. Request workers scan
+source text and metadata to find bug-report terms and related symbols. This is a
+host-side search stage and does not use the GPU.
+
+Candidate expansion is CPU and CPU-memory-bandwidth sensitive. The workload
+expands initial matches through dependency and test-affinity graphs. This stage
+models a coding agent following imports, call paths, and likely test coverage
+relationships to find files that should be included in context.
+
+Candidate reranking is CPU sensitive. Candidate chunks are scored and sorted so
+that only the most relevant code regions are kept. This models the ranking step
+between broad repository search and final prompt construction.
+
+Context packing is CPU and CPU-memory-bandwidth sensitive. The selected chunks
+are converted into a compact model prompt with file paths, symbols, and snippets.
+This stage is sensitive to host memory movement because it repeatedly reads,
+filters, and assembles code fragments.
+
+CPU-side tool work is CPU and CPU-memory-bandwidth sensitive. The `workers`
+processes perform repository-support work, metadata traversal, and large host
+memory movement. The `compute_workers` processes add CPU-heavy hashing and
+buffer mutation to model tool-side compute pressure.
+
+vLLM request construction is CPU sensitive. Request workers serialize the prompt
+as OpenAI-compatible JSON and send it to the local vLLM endpoint. This stage
+uses host CPU, Python runtime, and loopback HTTP, but not GPU compute directly.
+
+Model inference is GPU sensitive, with CPU participation. vLLM performs
+transformer inference on the GPUs with tensor parallelism. The GPU handles the
+attention and token generation work, while CPU still participates in request
+scheduling, HTTP serving, tokenization-related overhead, and response handling.
+
+Response processing is CPU sensitive. The benchmark parses the vLLM response,
+records token usage, latency, response size, and request success or failure.
+
+Metric collection is CPU-side system work. `mpstat` records CPU utilization,
+`nvidia-smi` records GPU utilization, GPU memory-controller utilization, and
+VRAM capacity usage, and AMDuProfPcm records host CPU memory bandwidth.
+
 ## Worker Types
 
 `request_workers` represent concurrent coding-agent loops. They perform code
