@@ -97,6 +97,73 @@ Agent/business metrics include:
 - retrieval amplification
 - response character count
 
+## Metric Definitions
+
+`workers` is the number of CPU-side tool workers. It is the main sweep axis and
+controls how many concurrent workers perform repository metadata traversal,
+context-support work, and memory movement.
+
+`cpu_avg_percent` is the average whole-machine CPU utilization during the run,
+computed from `mpstat` as `100 - idle`.
+
+`cpu_peak_percent` is the highest sampled whole-machine CPU utilization.
+
+`gpu_avg_percent` is the average GPU compute utilization across all visible GPUs,
+reported by `nvidia-smi`.
+
+`gpu_peak_percent` is the highest sampled average GPU compute utilization.
+
+`gpu_memctl_avg_percent` is the average GPU memory-controller utilization from
+`nvidia-smi utilization.memory`. It is a percentage, not a GB/s bandwidth value.
+
+`gpu_memctl_peak_percent` is the peak sampled GPU memory-controller utilization.
+
+`gpu_vram_avg_percent` is average GPU memory capacity usage, computed from
+`memory.used / memory.total`.
+
+`gpu_vram_peak_percent` is the peak sampled GPU memory capacity usage.
+
+`gpu_vram_used_avg_mb` is the average GPU memory capacity used per GPU in MB.
+
+`mem_bw_avg_gbps` is average host CPU memory bandwidth from AMDuProfPcm
+`Total Mem Bw (GB/s)`.
+
+`mem_bw_peak_gbps` is the peak host CPU memory bandwidth sample from AMDuProfPcm.
+
+`completed` is the count of successful vLLM chat completion requests.
+
+`failed` is the count of failed vLLM requests, including timeouts, HTTP errors,
+connection failures, or malformed responses.
+
+`failure_rate_percent` is `failed / (completed + failed) * 100`.
+
+`request_throughput_rps` is successful request throughput, computed as
+`completed / active_window_seconds`.
+
+`attempt_throughput_rps` includes both successful and failed request attempts.
+
+`latency_avg_s` is average successful request latency in seconds. It includes
+context construction, HTTP request, vLLM inference, and response parsing.
+
+`latency_p50_s` is median successful request latency.
+
+`latency_p95_s` is p95 successful request latency.
+
+`prompt_tokens_per_s`, `completion_tokens_per_s`, and `total_tokens_per_s` are
+derived from vLLM OpenAI-compatible `usage` fields divided by the active
+workload window.
+
+`scanned_gb` is the amount of repository and metadata data processed by request
+workers while building model context.
+
+`context_mb` is the final packed context size sent to vLLM.
+
+`retrieval_amplification` is `scanned_bytes / context_bytes`. It shows how much
+CPU-side search and filtering work was required to produce one byte of model
+context.
+
+`response_chars` is the total number of response characters returned by vLLM.
+
 ## Remote Setup Used
 
 The remote server used during testing was:
@@ -174,4 +241,3 @@ AMDuProfPcm memory bandwidth peak: 583.19 GB/s
 request throughput: 0.500 req/s
 latency avg: 4.119 s
 ```
-
