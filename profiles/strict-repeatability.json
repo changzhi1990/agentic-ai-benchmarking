@@ -1,0 +1,14 @@
+{
+  "execution": {
+    "pin_cpu_affinity": true,
+    "pin_numa": true,
+    "repeat_runs_min": 30,
+    "single_tenant": true
+  },
+  "goal": "maximize-repeatability",
+  "measurement": {
+    "statistic": "median",
+    "warmup_runs": 1
+  },
+  "profile_id": "strict-repeatability"
+}

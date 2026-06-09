@@ -1,0 +1,50 @@
+{
+  "artifacts": {
+    "output_dir": "artifacts/smoke"
+  },
+  "benchmark": {
+    "initial_repo": "repo@abc123",
+    "system_prompt_id": "sys-v1",
+    "task_id": "sorting-v1",
+    "test_script": "tests/run.sh",
+    "tool_permission_profile": "workspace-write",
+    "user_task_id": "task-v1"
+  },
+  "budget": {
+    "max_iterations": 8,
+    "token_budget": 120000
+  },
+  "controlled_variables": [
+    "system_prompt",
+    "user_task_description",
+    "initial_repo",
+    "test_script",
+    "tool_permissions",
+    "gpu",
+    "topology",
+    "model",
+    "seed",
+    "vllm_launch_command",
+    "token_budget",
+    "max_rounds"
+  ],
+  "profile_id": "strict-repeatability",
+  "runtime": {
+    "model_id": "gpt-5.5",
+    "seed": 7,
+    "tokenizer_version": "tok-1",
+    "vllm_launch_command": "python -m vllm.entrypoints.openai.api_server"
+  },
+  "schema_version": "1.0",
+  "system": {
+    "cpu": {
+      "model": "AMD EPYC",
+      "numa_topology": "2 sockets x 4 NUMA"
+    },
+    "gpu": {
+      "count": 8,
+      "model": "MI300X",
+      "topology": "xgmi-mesh"
+    }
+  }
+}
