@@ -1,31 +1,103 @@
-# Agentic AI CPU Memory Workload
+# Bug Report Coding-Agent Benchmark
 
-This directory contains a standalone copy of the bug-report driven coding-agent
-workload and the latest benchmark artifacts.
-
-## What It Simulates
-
-The workload models a coding agent that receives a bug report, scans a synthetic
-large codebase, builds metadata indexes, expands candidates through dependency
-and test-affinity graphs, packs context, and sends requests to a local vLLM
+This repository contains a synthetic coding-agent benchmark built around a
+realistic bug-fixing workflow. The workload starts from a bug report, searches a
+large synthetic codebase, expands candidate files through metadata and dependency
+graphs, builds a prompt context, and sends coding-agent requests to a local vLLM
 server.
 
-The main scaling axis is `workers`, which represents CPU-side tool workers that
-stress code retrieval, metadata traversal, context packing, and memory movement.
+The benchmark is designed to study how a local coding agent behaves when code
+search, context construction, model inference, and host-side tool execution run
+at the same time.
 
-## Key Files
+## Scenario
 
-- `agentic_benchmarking/bug_report_workload.py`: workload generator and remote
-  orchestration.
-- `agentic_benchmarking/remote_workload.py`: remote execution, CPU/GPU sampling,
-  and AMDuProfPcm memory-bandwidth parsing.
-- `scripts/run_remote_bug_report_workload.py`: CLI entrypoint.
-- `tests/test_bug_report_workload.py`: workload behavior tests.
-- `tests/test_remote.py`: remote runner and metric parser tests.
-- `artifacts/workers-sweep-business-metrics.csv`: latest workers sweep table.
-- `artifacts/workers-sweep-business-metrics.json`: latest workers sweep raw data.
+The simulated task is a bug report for a retry-state failure:
 
-## Remote Requirements
+```text
+retry state is lost after the first timeout
+```
+
+The report describes a task system where the first upstream timeout should
+advance and persist `retry_state`, but the persisted state remains stale. A real
+coding agent would need to inspect retry update logic, task persistence code,
+caller/callee relationships, and tests that exercise the failure path.
+
+This benchmark models that workflow with a generated codebase containing many
+similar modules and symbols, such as:
+
+- `apply_retry_update_*`
+- `persist_task_snapshot_*`
+- `retry_state`
+- `task_store`
+- timeout and downstream task state paths
+
+The goal is not to test whether the model can produce a correct patch. The goal
+is to reproduce the system behavior of a coding agent while it performs bug
+localization and context preparation at scale.
+
+## Workflow
+
+Each benchmark run follows this coding-agent flow:
+
+1. Read a structured bug report with observed behavior, reproduction steps,
+   failure artifacts, and expected behavior.
+2. Generate a large synthetic repository with repeated but slightly different
+   modules and symbols.
+3. Build repository metadata: posting lists, symbol records, dependency graph,
+   and test-affinity graph.
+4. Scan repository text for bug-report terms and related symbols.
+5. Expand candidates through dependency and test-affinity relationships.
+6. Rerank candidate chunks and pack a compact context for the model.
+7. Send OpenAI-compatible chat completion requests to local vLLM.
+8. Record request latency, success/failure count, token usage, scanned bytes,
+   context size, and response size.
+9. Sample host resources while the agent loop runs.
+
+This represents the bug-localization and context-construction stage of a coding
+agent. It does not yet apply patches or run a test suite.
+
+## Worker Types
+
+`request_workers` represent concurrent coding-agent loops. They perform code
+search, candidate expansion, context packing, and vLLM requests.
+
+`workers` represent CPU-side tool workers. They model the parallel repository
+search and metadata traversal that support coding-agent context construction.
+This is the main scaling axis in the included benchmark results.
+
+`compute_workers` represent additional CPU-heavy tool work, such as hashing,
+shuffle, and buffer mutation. They are used to study contention between CPU
+compute work, code-search work, and vLLM request serving.
+
+## Measurements
+
+The benchmark records both system metrics and agent/business metrics.
+
+System metrics include:
+
+- CPU utilization from `mpstat`
+- GPU utilization from `nvidia-smi`
+- host memory utilization from `free`
+- CPU memory bandwidth from `AMDuProfPcm`
+- per-run memory bandwidth average, peak, and raw samples
+
+Agent/business metrics include:
+
+- completed requests
+- failed requests
+- failure rate
+- request throughput
+- request latency average, p50, and p95
+- prompt token throughput
+- completion token throughput
+- total token throughput
+- scanned repository bytes
+- packed context bytes
+- retrieval amplification
+- response character count
+
+## Remote Setup Used
 
 The remote server used during testing was:
 
@@ -44,36 +116,13 @@ sudo AMDuProfPcm -m memory -a --msr -r
 
 ## Run Tests
 
-From this directory:
-
 ```bash
 python3 -m unittest tests.test_bug_report_workload tests.test_remote -v
 ```
 
-## Run CPU-Only Memory Bandwidth Test
+## Run The Coding-Agent Workload
 
-```bash
-AAB_REMOTE_HOST=10.83.32.172 \
-AAB_REMOTE_USER=user \
-AAB_REMOTE_PASSWORD=000000 \
-python3 scripts/run_remote_bug_report_workload.py \
-  --duration-seconds 36 \
-  --sample-interval 5 \
-  --request-workers 0 \
-  --workers 40 \
-  --compute-workers 0 \
-  --repo-files 2048 \
-  --chunk-repeats 8 \
-  --memory-block-mb 128 \
-  --memory-stream-rounds 8 \
-  --top-k 8 \
-  --skip-vllm-healthcheck \
-  --output-dir artifacts/cpu-memory-bandwidth-amduprof-rerun
-```
-
-## Run Balanced CPU/GPU Test
-
-This uses vLLM requests plus CPU-side workers:
+This run uses vLLM requests and CPU-side tool workers:
 
 ```bash
 AAB_REMOTE_HOST=10.83.32.172 \
@@ -93,9 +142,9 @@ python3 scripts/run_remote_bug_report_workload.py \
   --output-dir artifacts/balanced-workers-96
 ```
 
-## Latest Workers Sweep
+## Run A Workers Sweep
 
-The latest sweep used:
+The latest sweep varied the main `workers` axis:
 
 ```text
 workers=16,32,48,64,96,128,160,190,256
@@ -108,6 +157,11 @@ memory_block_mb=128
 memory_stream_rounds=8
 top_k=8
 ```
+
+The latest sweep artifacts are:
+
+- `artifacts/workers-sweep-business-metrics.csv`
+- `artifacts/workers-sweep-business-metrics.json`
 
 Best balanced point observed:
 
